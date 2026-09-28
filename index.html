@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dividir gastos</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1f6f5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gastos">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f2f4f3; --card: #ffffff; --text: #16201c; --muted: #66726c;
+    --line: #dde3e0; --accent: #1f6f5c; --accent-ink: #ffffff;
+    --ok: #15803d; --bad: #b91c1c; --warn: #9a5b0a; --warn-bg: rgba(154,91,10,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #101715; --card: #1a2420; --text: #eaf1ee; --muted: #93a29b;
+      --line: #2b3934; --accent: #5cc4a6; --accent-ink: #08130f;
+      --ok: #4ade80; --bad: #f87171; --warn: #fbbf24; --warn-bg: rgba(251,191,36,.12);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; font-size: 15px;
+    padding: env(safe-area-inset-top, 12px) 16px env(safe-area-inset-bottom, 24px);
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  .install {
+    display: none; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 8px;
+    border-radius: 10px; background: var(--card); border: 1px solid var(--line);
+    font-size: 12px; color: var(--muted);
+  }
+  .install.show { display: flex; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-bottom: 8px; }
+  input[type=text] {
+    width: 100%; font-size: 16px; padding: 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: transparent; color: var(--text);
+    font-family: inherit; min-width: 0;
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .lbl { font-size: 11px; color: var(--muted); }
+  .sum { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; text-align: center; }
+  .sum .k { font-size: 10px; color: var(--muted); letter-spacing: .04em; }
+  .sum .v { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .warn { margin-top: 8px; padding: 7px 9px; border-radius: 8px; font-size: 12px; background: var(--warn-bg); color: var(--warn); }
+  [hidden] { display: none !important; }
+  .head, .r1 { display: grid; grid-template-columns: 1fr 88px 26px 34px; gap: 6px; align-items: center; }
+  .head { font-size: 10px; color: var(--muted); padding: 0 10px 2px; letter-spacing: .04em; }
+  .p { padding: 7px 10px; }
+  .r2 { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .r2 b { color: var(--text); }
+  .r1 input[type=checkbox] { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+  .del { border: none; background: transparent; color: var(--muted); font-size: 18px; height: 34px; padding: 0; cursor: pointer; border-radius: 8px; }
+  .del.armed { background: var(--bad); color: #fff; font-size: 11px; font-weight: 600; }
+  .pos { color: var(--ok) !important; } .neg { color: var(--bad) !important; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  button.b { padding: 11px 4px; font-size: 13px; border-radius: 8px; cursor: pointer; font-family: inherit;
+    border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  button.b.armed { background: var(--bad); border-color: var(--bad); color: #fff; }
+  h2 { font-size: 15px; margin: 0 0 6px; }
+  .pay { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .pay:last-child { border-bottom: none; }
+  .hint { font-size: 12px; color: var(--muted); }
+  #status { font-size: 12px; color: var(--ok); min-height: 16px; margin: -2px 0 8px; text-align: center; }
+  #fallback { width: 100%; height: 150px; font-size: 13px; margin-bottom: 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 8px; font-family: inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="install" id="installTip">📲 Añádela a tu pantalla de inicio: menú del navegador → "Añadir a pantalla de inicio".</div>
+
+  <div class="card">
+    <div class="lbl">El total se calcula sumando lo que ha pagado cada uno</div>
+    <div class="sum">
+      <div><div class="k">TOTAL</div><div class="v" id="sTotal">0,00 €</div></div>
+      <div><div class="k">PAGADO</div><div class="v" id="sPaid">0,00 €</div></div>
+      <div><div class="k">PARTICIPAN</div><div class="v" id="sN">0</div></div>
+      <div><div class="k">CADA UNO</div><div class="v" id="sEach">—</div></div>
+    </div>
+    <div class="warn" id="warn" hidden></div>
+  </div>
+
+  <div class="head"><span>NOMBRE</span><span>PAGÓ (€)</span><span>PART.</span><span></span></div>
+  <div id="people"></div>
+
+  <div class="btns">
+    <button class="b" id="add" type="button">+ Persona</button>
+    <button class="b" id="copy" type="button">Copiar</button>
+    <button class="b" id="reset" type="button">Borrar</button>
+  </div>
+  <div id="status" role="status"></div>
+  <textarea id="fallback" readonly hidden></textarea>
+
+  <div class="card">
+    <h2>Quién paga a quién</h2>
+    <div id="settle"></div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var KEY = 'dividir_gastos_v2';
+  var DEFAULT = [
+    { name: 'Carlos',   paid: '35',  on: true },
+    { name: 'Pitu',     paid: '42',  on: true },
+    { name: 'Laura',    paid: '',    on: true },
+    { name: 'Carlitos', paid: '',    on: true },
+    { name: 'Luis',     paid: '530', on: true },
+    { name: 'Pepón',    paid: '',    on: true }
+  ];
+  var state = load();
+
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY));
+      if (s && s.people && s.people.length) return s;
+    } catch (e) {}
+    return { people: DEFAULT.map(function (p) { return { name: p.name, paid: p.paid, on: p.on }; }) };
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  function cents(v) {
+    var n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
+    return (isFinite(n) && n > 0) ? Math.round(n * 100) : 0;
+  }
+  function eur(c) { return (c / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function $(id) { return document.getElementById(id); }
+
+  var $people = $('people');
+  var armedTimer = null;
+
+  function build() {
+    $people.innerHTML = '';
+    state.people.forEach(function (p, i) {
+      var d = document.createElement('div');
+      d.className = 'card p';
+      d.setAttribute('data-i', i);
+      d.innerHTML =
+        '<div class="r1">' +
+        '<input type="text" id="n' + i + '" data-f="name" value="' + esc(p.name) + '" placeholder="Nombre" aria-label="Nombre">' +
+        '<input type="text" id="m' + i + '" inputmode="decimal" data-f="paid" value="' + esc(p.paid) + '" placeholder="0" aria-label="Importe pagado">' +
+        '<input type="checkbox" id="c' + i + '" data-f="on" ' + (p.on ? 'checked' : '') + ' aria-label="Participa">' +
+        '<button class="del" type="button" data-del="' + i + '" aria-label="Quitar">✕</button></div>' +
+        '<div class="r2"><span>Le toca: <b data-o="share">0,00 €</b></span><span>Saldo: <b data-o="bal">0,00 €</b></span></div>';
+      $people.appendChild(d);
+    });
+  }
+
+  var last = null;
+
+  function calc() {
+    var paidC = state.people.map(function (p) { return cents(p.paid); });
+    var total = paidC.reduce(function (a, b) { return a + b; }, 0);
+    var idx = [];
+    state.people.forEach(function (p, i) { if (p.on) idx.push(i); });
+    var n = idx.length;
+    var shares = state.people.map(function () { return 0; });
+    if (n > 0) {
+      var base = Math.floor(total / n), rem = total - base * n;
+      idx.forEach(function (i, k) { shares[i] = base + (k < rem ? 1 : 0); });
+    }
+    var bal = state.people.map(function (p, i) { return paidC[i] - shares[i]; });
+    return { paidC: paidC, totalC: total, n: n, shares: shares, bal: bal };
+  }
+
+  function settlements(c) {
+    var cred = [], debt = [];
+    c.bal.forEach(function (b, i) {
+      if (b > 0) cred.push({ i: i, a: b });
+      else if (b < 0) debt.push({ i: i, a: -b });
+    });
+    cred.sort(function (x, y) { return y.a - x.a; });
+    debt.sort(function (x, y) { return y.a - x.a; });
+    var out = [], a = 0, b = 0;
+    while (a < debt.length && b < cred.length) {
+      var m = Math.min(debt[a].a, cred[b].a);
+      out.push({ from: debt[a].i, to: cred[b].i, amt: m });
+      debt[a].a -= m; cred[b].a -= m;
+      if (debt[a].a === 0) a++;
+      if (cred[b].a === 0) b++;
+    }
+    return out;
+  }
+
+  function name(i) { return state.people[i].name.trim() || ('Persona ' + (i + 1)); }
+
+  function update() {
+    var c = calc();
+    $('sTotal').textContent = eur(c.totalC);
+    $('sN').textContent = c.n;
+    $('sPaid').textContent = eur(c.totalC);
+    $('sEach').textContent = c.n ? eur(Math.floor(c.totalC / c.n)) + (c.totalC % c.n ? '*' : '') : '—';
+
+    var w = $('warn');
+    if (c.n === 0) { w.hidden = false; w.textContent = 'Marca al menos una persona como participante.'; }
+    else if (c.totalC % c.n !== 0) { w.hidden = false; w.textContent = '* No se divide exacto: algunos pagan 1 céntimo más.'; }
+    else { w.hidden = true; }
+
+    $people.querySelectorAll('.p').forEach(function (card, i) {
+      card.querySelector('[data-o=share]').textContent = eur(c.shares[i]);
+      var b = card.querySelector('[data-o=bal]');
+      b.textContent = (c.bal[i] > 0 ? '+' : '') + eur(c.bal[i]);
+      b.className = c.bal[i] > 0 ? 'pos' : c.bal[i] < 0 ? 'neg' : '';
+    });
+
+    var s = $('settle');
+    if (c.totalC === 0 || c.n === 0) {
+      s.innerHTML = '<div class="hint">Introduce importes para ver los pagos.</div>';
+      last = { c: c, list: [] };
+    } else {
+      var list = settlements(c);
+      last = { c: c, list: list };
+      s.innerHTML = list.length
+        ? list.map(function (t) {
+            return '<div class="pay"><b>' + esc(name(t.from)) + '</b> paga <b>' + eur(t.amt) + '</b> a <b>' + esc(name(t.to)) + '</b></div>';
+          }).join('')
+        : '<div class="hint">Todo saldado, nadie debe nada.</div>';
+    }
+  }
+
+  function say(msg) {
+    var s = $('status'); s.textContent = msg;
+    setTimeout(function () { if (s.textContent === msg) s.textContent = ''; }, 2500);
+  }
+
+  function disarm() {
+    if (armedTimer) { clearTimeout(armedTimer); armedTimer = null; }
+    document.querySelectorAll('.armed').forEach(function (el) {
+      el.classList.remove('armed');
+      if (el.id === 'reset') el.textContent = 'Borrar';
+      else el.textContent = '✕';
+    });
+  }
+  function arm(el, label) {
+    disarm();
+    el.classList.add('armed'); el.textContent = label;
+    armedTimer = setTimeout(disarm, 3000);
+  }
+
+  $people.addEventListener('input', function (e) {
+    var card = e.target.closest('.p'); if (!card) return;
+    var p = state.people[+card.getAttribute('data-i')];
+    var f = e.target.getAttribute('data-f');
+    if (f === 'on') p.on = e.target.checked;
+    else if (f) p[f] = e.target.value;
+    save(); update();
+  });
+  $people.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-del]'); if (!b) return;
+    if (b.classList.contains('armed')) {
+      state.people.splice(+b.getAttribute('data-del'), 1);
+      disarm(); save(); build(); update();
+    } else { arm(b, '¿Quitar?'); }
+  });
+  $('add').addEventListener('click', function () {
+    disarm();
+    state.people.push({ name: '', paid: '', on: true }); save(); build(); update();
+    var inputs = $people.querySelectorAll('[data-f=name]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+  $('reset').addEventListener('click', function () {
+    var b = this;
+    if (b.classList.contains('armed')) {
+      state.people.forEach(function (p) { p.paid = ''; p.on = true; });
+      disarm(); save(); build(); update(); say('Importes borrados');
+    } else { arm(b, '¿Seguro?'); }
+  });
+  $('copy').addEventListener('click', function () {
+    if (!last) return;
+    disarm();
+    var c = last.c, L = [];
+    L.push('DIVISIÓN DE GASTOS');
+    L.push('Total: ' + eur(c.totalC) + ' entre ' + c.n + ' → ' + (c.n ? eur(Math.floor(c.totalC / c.n)) : '—') + ' por persona');
+    L.push('');
+    state.people.forEach(function (p, i) {
+      L.push(name(i) + (p.on ? '' : ' (no participa)') + ': pagó ' + eur(c.paidC[i]) + ', le toca ' + eur(c.shares[i]) + ', saldo ' + (c.bal[i] > 0 ? '+' : '') + eur(c.bal[i]));
+    });
+    if (last.list && last.list.length) {
+      L.push(''); L.push('PAGOS:');
+      last.list.forEach(function (t) { L.push(name(t.from) + ' paga ' + eur(t.amt) + ' a ' + name(t.to)); });
+    }
+    var txt = L.join('\n');
+    var fb = $('fallback');
+    function showFallback() {
+      fb.value = txt; fb.hidden = false; fb.focus(); fb.select();
+      say('Selecciona y copia el texto');
+    }
+    try {
+      navigator.clipboard.writeText(txt).then(function () { fb.hidden = true; say('Resumen copiado'); }, showFallback);
+    } catch (e) { showFallback(); }
+  });
+
+  // Aviso de "añadir a pantalla de inicio" solo si aún no está instalada
+  try {
+    var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (!standalone) $('installTip').className = 'install show';
+  } catch (e) {}
+
+  build(); update();
+})();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('service-worker.js').catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
